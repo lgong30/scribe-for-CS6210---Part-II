@@ -21,16 +21,21 @@
 \semester{Fall 2017}
 \instructor{Prof. Umakishore Ramachandran}
 \author{Long Gong}
-\footnotetext[1]{All the figures in this scribe are directly from or modified from the lecture of Prof. Umakishore Ramachandran.}
+\footnotetext[1]{All the figures in this scribe are directly from or modified from the lecture 
+slides provided by Prof. Umakishore Ramachandran.}
 \maketitle
 
 \section{Overview}\label{sec: overview}
+
+In this lecture, we will cover the details of the multiple-writer coherence protocol, and some details 
+for the implementations of LRC with multi-writer coherence protocol
+
 
 \section{LRC with Multi-Writer Coherence Protocol}\label{sec: lrc-mwcp}
 
 In the previous lecture, we have talked about the single-writer multiple-reader protocol for Lazy RC (LRC). 
 The false sharing problem associated it brings us the new protocol, which is called multiple-writer 
-protocol. The idea is we want to maintain the coherence information still at the granularity of 
+protocol. The idea is we want to maintain the coherence information still at the granularity
 of pages. Because that is the granularity at which the operating system operates and therefore the DSM 
 can be integrated with the operating system. But at the same time, we want to allow multiple writers to be able to 
 same page recognizing that application programmer may have packed lots of different data structures 
@@ -38,13 +43,20 @@ within the same page. So we are going to see how the multiple-writer coherence p
 works and in particular we are going to use that in concert with lazy RC. The background of what is going to describe 
 is covered in the TreadMarks paper~\cite{Amza1996DSM}. 
 
-As shown in~\autoref, a process of $P1$ acquires a lock and makes modifications. Note that, the notations 
+
+\begin{figure}[!htbp]
+\centering 
+\includegraphics[width=\fullsize, angle=-90]{Figures/mwcp}
+\caption{LRC with multiple-writer coherence protocol.}\label{fig: mwcp}
+\end{figure}
+
+As shown in~\autoref{fig: mwcp}, a process of $P1$ acquires a lock and makes modifications. Note that, the notations 
 {\code x, y, z} stand for three different pages. And by modifications, we mean the modification to the 
 data structures that are contained in these pages. Therefore, pages {\code x, y, z} are those pages 
 that are being modified within the critical section when processor $P1$ executes the piece of code 
-shown in~\autoref. Note that, the operating system has no knowledge of the association the lock 
+shown in~\autoref{fig: mwcp}. Note that, the operating system has no knowledge of the association the lock 
 {\code L} and the pages that are being modified. All it knows is that within the critical section, 
-these ({\it i.e.,} pages {\code x, y, z}) are the pages that were modified. That is what the operating 
+these pages ({\it i.e.,} pages {\code x, y, z}) are the pages that were modified. That is what the operating 
 system knows. What we are going to do is we are going to create a {\it diff} of the changes that 
 were made to the pages {\code x, y, z}. We know at the beginning of this critical section, 
 what the contents of the pages {\code x, y, z} are and at the end of this critical section, we 
@@ -52,7 +64,7 @@ are going to find out what is the difference (or changes) that has been made and
 ``diffs'' between the original pages and modified ones, {\it i.e.,} $x_d, y_d, z_d$. 
 
 So the next time the same lock {\code L} is acquired by some of the process of $P2$. We are going to first invalidate 
-the pages were modified by the previous lock holder. Note that, although the LCR does not know these ``diffs'', it 
+the pages were modified by the previous lock holder. Note that, although the LRC does not know these ``diffs'', it 
 knows the association between the lock and the pages that are modified within the critical section governed 
 by this lock. So when $P2$ makes this lock acquisition, the DSM is going to first invalidate: If copies 
 of pages {\code x, y, z} are locally resident in the process of $P2$, then the DSM software is 
@@ -74,7 +86,7 @@ version of the page that is with the owner of the page. So that it can create th
 of the page. And you can extend this to any number of processors that may have made modifications 
 under the provision of the lock {\code L}. All of those ``diffs'' are going to be applied in order for the 
 processors of $P2$ to access the page as the current page. If after accessing the page {\code x} 
-and its execution $P2$ touches, say page {\code z}, in this critical section. Once again, the DSM software 
+and during its execution $P2$ touches, say page {\code z}, in its critical section. Once again, the DSM software 
 will get all the ``diffs'' from previous holders of the same lock, and apply the ``diffs'' to the 
 original copy of page {\code z}. So you can see that even though the invalidation was done 
 right at the beginning of a critical section, we are procrastinating getting the 
@@ -86,11 +98,17 @@ future lock acquisition for {\code L} will result in invalidating {\code x, y, z
 all of those pages may have been modified. And the next critical section wants to access this lock {\code L} 
 has to get the current versions of all the pages that were ever associated with {\code L}. 
 
+\begin{figure}[!htbp]
+\centering 
+\includegraphics[width=\fullsize, angle=-90]{Figures/example-mwcp}
+\caption{An example of multiple-writer case.}\label{fig: mwcp-example}
+\end{figure}
+
 Now, it is the time to talk about the multiple-writer part of it. Note that, it could be multiple user 
 data structures present in a given page {\code x}. If that is the case, the programmer probably 
 has different locks for accessing different portions of the data structures that happened to all 
 fit within this page {\code x}. So it is conceivable that when all of the processes shown 
-in~\autoref were going on. Another processor, say $P4$, and a thread that was running on processor 
+in~\autoref{fig: mwcp-example} were going on. Another processor, say $P4$, and a thread that was running on processor 
 $P4$ got a completely different lock, say {\code L'}. And it is accessing some data structure 
 that happens to be in the same page {\code x}. This is perfectly fine. The DSM software is 
 not going to do anything in terms of the ``diffs'' that is has created with respect to the 
@@ -105,6 +123,13 @@ So that is the important thing, that is where the multiple-writer coherence prot
 in. That simultaneously the same page could be modified by several different threads on several different 
 processors. 
 
+
+\begin{figure}
+\centering
+\includegraphics[width=\fullsize]{Figures/impl}
+\caption{Implementation.}\label{fig: impl}
+\end{figure}
+
 \noindent
 {\bf Implementation.} Now, let us look at some implementation details. What is going to happen is 
 when a process or a thread on a processor tries to write to a page {\code x}. At the point of 
@@ -115,12 +140,12 @@ has been created in physical memory, is not mapped in the page table of any proc
 copy of the same page created by the operating system as a twin. When the thread reaches the release point, 
 as mentioned in previous lecture, what the DSM software is going to do, is to compute the ``diffs'' between 
 the changes that have been made, and the original version. Note that, here by ``original version'', we 
-mean the twin of the page {\code x}. And the ``diffs'' is going to be computed as a run-length encoded ``diffs'', 
-meaning that all of the page has not been modified, as shown in~\autoref , only the colored portions are being 
+mean the twin of the page {\code x}. And the ``diffs'' is going to be computed as a run-length encoded~\cite{rle} ``diffs'', 
+meaning that all of the page has not been modified, as shown in~\autoref{fig: impl}, only the colored portions are being 
 modified, so the ``diffs'' is going to be computed as the colored parts. The ``diffs'' is a data structure 
 that has been created by the DSM software to remember the changes that have been made to this page {\code x} 
 prior to the release. As you might have been imagined already, when the same lock that governs accesses to this 
-page which was release at the ``release line'' in~\autoref, is acquired by a different processor. 
+page which was release at the ``release line'' in~\autoref{fig: impl}, is acquired by a different processor. 
 At the point of acquisition, what we are going to do is we are going to invalidate all the pages that 
 were touched in the critical section including {\code x}. So {\code x} will be invalidated 
 at the point of acquisition of the same lock that is governing this critical section. When that 
@@ -134,7 +159,7 @@ twin is complete we only need it in order to compute the ``diffs''. We have comp
 original page and everything that needs to be done. Getting rid of the ``twin'' essentially means that we are 
 freeing up the physical memory that we allocated for creating the ``twin'' in the first place. 
 
-As mentioned earlier, it is a multiple-writer protocol. Therefore, the action shown in~\autoref can be happening 
+As mentioned earlier, it is a multiple-writer protocol. Therefore, the action shown in~\autoref{fig: impl} can be happening 
 simultaneously for the same page {\code x} on different nodes of the cluster. If multiple writes happen to 
 the same portion of the same page under different lock, which will result in {\bf data race}. However that is 
 the user's problem. That is not the problem of the DSM software. It is an application problem, because it represents 
@@ -143,7 +168,7 @@ that detailed above is an example of the cooperation between the DSM software an
 In particular, TreadMarks~\cite{Amza1996DSM} implemented this LRC multiple-writer coherence protocol 
 on a UNIX system. And in the UNIX system, the operating system generates an exception called {\bf SIGSEGV} in the 
 operating system layer when a shared page is accessed by a thread. This exception is caught by the 
-thread library;s runtime handler and at that time the DSM software gets into gear, contacts the owner of the page, 
+thread library's runtime handler and at that time the DSM software gets into gear, contacts the owner of the page, 
 checks the status of the page. And if the page in invalid then it gets the page and 
 the ``diffs'' for that page. Once it brings in the contents of the page and the ``diffs'', it creates a current 
 version of the page. And if the processor that is trying to access the page is making a read access, then 
@@ -205,11 +230,17 @@ then it is going to resume this thread that made the call in the first place. Ag
 system support for this. And the structured DSM is a very popular approach that has been used 
 in systems such as Linda~\cite{linda}, Orca~\cite{bal1992orca}, and Stampede~\cite{nikhil1998stampede} that was 
 done at Georgia Tech., and successors to Stampede called Stampede RT~\cite{stampedert} and 
-PTS (In the later on lectures of this course, we will see PTS as an example of a structured DSM system)~\cite{Hilley2000PTS}. 
+PTS (In the later-on lectures of this course, we will see PTS as an example of a structured DSM system)~\cite{Hilley2000PTS}. 
 
 \section{DSM and Speedup}\label{sec: permance}
 
-As shown in~\autoref, we have an illusion of shared memory, which is implemented by physical memories 
+\begin{figure}[!htb]
+\centering
+\includegraphics[width=\fullsize]{Figures/performance.PNG}
+\caption{DSM and speedup.}\label{fig: speedup}
+\end{figure}
+
+As shown in~\autoref{fig: speedup}, we have an illusion of shared memory, which is implemented by physical memories 
 that strewn all over the entire cluster. And the hope is that the application that is running on 
 the different nodes of this cluster will actually get speedup with increasing number of 
 processes, but such speedup is not automatic if the sharing that we are doing. Even though 
@@ -233,4 +264,6 @@ extreme careful on how to structure codes that can execute efficiently on distri
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
+
+
 \end{document}
